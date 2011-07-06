@@ -1,0 +1,10 @@
+{
+  "name": "HistoryViz",
+  "version": "1.0",
+  "description": "Visualize and interact with your history.",
+  "permissions": ["history", "tabs"],
+  "browser_action": {
+    "default_icon": "icon.png" 
+  },
+  "background_page": "background_page.html"
+}

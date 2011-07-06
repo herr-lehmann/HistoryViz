@@ -1,0 +1,137 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>HistoryViz</title>
+	<link type="text/css" href="css/style.css" rel="stylesheet" />
+	<script language="javascript" type="text/javascript" src="js/jit.js"></script>
+	<link type="text/css" href="css/cupertino/jquery-ui-1.8.7.custom.css" rel="stylesheet" />	
+	<script type="text/javascript" src="js/jquery-1.4.4.min.js"></script>
+	<script type="text/javascript" src="js/jquery-ui-1.8.7.custom.min.js"></script>
+	
+	<script src="js/historyViz.js"></script>
+
+	<script>
+		$(function(){
+			var from = new Date();
+			var to = new Date();
+			
+			var setValueDisplay = function(leftBound, rightBound){
+				var now = (new Date()).getTime();
+
+				from.setTime(now + leftBound * 1000 * 60 * 60);
+				to.setTime(now + rightBound * 1000 * 60 * 60);
+				
+				var getFullDigits = function(digit){
+					if(digit.toString().length != 2){
+						return "0" + digit;
+					}
+					return digit;
+				};
+				
+				$( "#value" ).text(getFullDigits(from.getDate()) +"."  + getFullDigits(from.getMonth() + 1) +". " 
+						+ getFullDigits(from.getHours()) + ":"  + getFullDigits(from.getMinutes()) +"." 
+						+ " - " 
+						+ getFullDigits(to.getDate()) + "."  + getFullDigits(to.getMonth() + 1) +". " 
+						+ getFullDigits(to.getHours()) + ":"  + getFullDigits(to.getMinutes()) + ".");		
+			};
+
+			$("#slider").slider({
+					range: true,
+					min: -100,
+					max: 0,
+					values: [-7 , 0 ],
+					slide: function(event, ui) {
+						setValueDisplay(ui.values[0], ui.values[1]);								
+					},
+					change: function(event, ui){
+						buildHistoryViz(from.getTime(), to.getTime());
+					},
+					create: function(event, ui){
+						 setValueDisplay(-7, 0);
+					}
+				});
+				
+			var controlsVisible = false;
+			var controlsActive = false;
+			var leftControls = 0;
+			
+			var hideControls = function(){
+				console.log(!controlsActive && ((new Date()).getTime() - leftControls) > 1800);
+				if(!controlsActive && ((new Date()).getTime() - leftControls) > 1800){
+					$('#controls').animate({top:-5-$('#controls').height()},
+						function(){
+							$('#controls').animate({opacity: 0.1}, 10);
+							$('#controls').css('box-shadow', '0 0 0 #fff');
+							controlsVisible = false;
+					});
+				}
+			};
+			
+			var showControls = function(){
+				$('#controls').css('box-shadow', '5px 5px 5px #888');
+				$('#controls').animate({top:-15});
+				controlsVisible = true;
+			};
+			
+			$('#controls').hover(
+				// in handler
+				function(){
+						if(!controlsVisible){
+							$('#controls').stop();
+							$('#controls').animate(
+							{opacity: 0.9}, 
+							50, 
+							function(){
+								showControls();
+							});
+						}else if(!controlsActive){
+							$('#controls').animate({opacity: 0.9}, 50);
+						}
+						controlsActive = true;
+				},
+				// out handler
+				function(){
+					console.log("hover out");
+					leftControls = (new Date()).getTime();
+					controlsActive = false;
+					
+					setTimeout(hideControls, 1800);
+					setTimeout(function(){
+						if(!controlsActive){
+							$('#controls').animate(
+								{opacity: 0.1},
+								500, 
+								function(){
+									$('#controls').css('box-shadow', '0 0 0 #fff');
+								}
+							);
+							
+						}
+					}, 1000);
+					
+				}
+			);
+			// center hypertree with space
+			$(document).keypress(function(e){
+
+				if(e.charCode === 32)
+					ht.onClick(-1);
+			});		
+			buildHistoryViz(from.getTime(), to.getTime());
+			setTimeout(function(){
+				hideControls();
+			}, 800);
+			});			
+	</script>
+  </head>
+  <body onLoad="init()">
+			<div id="controls">
+					<div id="slider"></div>
+					<div id="value">&nbsp;</div>
+				<div id='handle'></div>
+			</div>
+			<div id="myViz">
+				<div id="_popup"></div>
+			</div>
+  </body>
+</html>

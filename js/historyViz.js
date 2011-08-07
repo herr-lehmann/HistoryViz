@@ -45,9 +45,12 @@ function buildHistoryViz(start, end) {
     });
 
 	var createNodeFromVisitItem = function(item){
+		var name = cleanUrl(item.url);
+		if(name === 'google.de')
+			name = "search";
 		return {
 			'id': item.id,
-			'name': cleanUrl(item.url),
+			'name': name,
 			'children': [],
 			'data':	{
 				'link': [{'url':item.url,'title':urlToHistoryItem[item.url].title}],
@@ -108,7 +111,7 @@ function buildHistoryViz(start, end) {
     };
 	var createTree = function(){
 		var visitIdToNode = {};
-		//iterate over all first level items
+		//iterate over all first level items (new Tabs)
 		for(var i in rootVisits){
 			var newNode = createNodeFromVisitItem(rootVisits[i]);
 			var sameNameFound = false;
@@ -117,24 +120,9 @@ function buildHistoryViz(start, end) {
 			for (var j=0; j < json.children.length; j++) {
 				if(json.children[j].name == newNode.name){
 					sameNameFound = true;
+					addVisitItemToNode(rootVisits[i], json.children[j]);
 
-					var sameUrlFound = false;
-					// check if the same url is already present
-					for(var k in json.children[j].data.link){
-						if(json.children[j].data.link[k].url == rootVisits[i].url || rootVisits[i].transition == 'link'){
-							sameUrlFound = true;
-							break;
-						}
-					}
-					
-					if(!sameUrlFound){
-						var title = urlToHistoryItem[rootVisits[i].url].title || rootVisits[i].url;
-						if(newNode.name == 'google.de'){
-							// removes ' - Google Search'
-							title = title.substr(0,title.length - 16);
-						}
-						json.children[j].data.link.push({'url':rootVisits[i].url,'title': title});
-					}
+					// save the relationship betweend the visitID to the calculated node
 					visitIdToNode[i] = json.children[j];
 				}
 			}
@@ -146,15 +134,17 @@ function buildHistoryViz(start, end) {
 			}
 		}
 		
-		console.log(visitIdToNode)
+		console.log(visitIdToNode);
+		
+		//establish links between the nodes
 		for(var visitId in linkedVisits){
-			var parentNode = null;
+			var parentItem = null;
 			
-			// take a look in the link items
+			// take a look in the link items to see if the referrer another link
 			if(linkedVisits[linkedVisits[visitId].referringVisitId]){
 				parentItem = linkedVisits[linkedVisits[visitId].referringVisitId]
 				
-			// check in the root nodes
+			// check in the root nodes for the referrer
 			}else if(rootVisits[linkedVisits[visitId].referringVisitId]){
 				parentItem = rootVisits[linkedVisits[visitId].referringVisitId]
 			
@@ -180,16 +170,37 @@ function buildHistoryViz(start, end) {
 			visitIdToNode[visitId] = childNode;			
 			
 			var sameNameFound = false;
+			
 			for(var i = 0; i < parentNode.children.length; i++){
 				if(parentNode.children[i].name == childNode.name){
 					sameNameFound = true;
+					addVisitItemToNode(linkedVisits[visitId], parentNode.children[i]);					
 					break;
 				}
 			}
-			if(parentNode.name !=  childNode.name && !sameNameFound){
+			
+			if(parentNode.name == childNode.name){
+				addVisitItemToNode(linkedVisits[visitId], parentNode);	
+			}else if(!sameNameFound){
 				parentNode.children.push(childNode);
 			}
 		}
+	};
+	
+	var addVisitItemToNode = function(visitItem, node){
+		// check if the same url is already present
+		for(var k in node.data.link){
+			if(node.data.link[k].url === visitItem.url){
+				return;
+			}
+		}
+		
+		var title = urlToHistoryItem[visitItem.url].title || visitItem.url;
+		if(node.name == 'google.de'){
+			// removes ' - Google Search'
+			title = title.substr(0, title.length - 16);
+		}
+		node.data.link.push({'url': visitItem.url,'title': title});
 	}
 }
 
@@ -272,7 +283,8 @@ function init() {
 		Tips: {  
 		    enable: true,  
 		    type: 'native',   
-		    onShow: function(tip, node) {  
+		    onShow: function(tip, node) { 
+			 	// do some node highlighting
 				node.data['$type'] = 'star';
 				node.data['$color'] = '#f00';
 				node.data['$dim'] = 12;
@@ -280,38 +292,56 @@ function init() {
 				
 				ht.plot();
 				
-				if(!ht.visiblePopup){
-					setTimeout(function(){
+				//show popup if it is not already there
+
+				setTimeout(function(){
+					console.log("onShow");
+					if(ht.popupActive == node){
 						var label = $("#" + node.id + ".node");
-						var p = $("#_popup") ;
+						var p = $("#_popup");
+						p.mouseenter(function(){
+							ht.popupActive = node;
+							console.log("tip entered");
+						}).mouseleave(function(){
+							ht.popupActive = null;
+							console.log("tip left", ht.config.Tips.onHide());
+							
+						});
 						p.empty();
 						for(var link in node.data.link){
+							var title = node.data.link[link].title;
+							if(title === ''){
+								title = node.name;
+							}
 							p.append(
 								"<a href='" + node.data.link[link].url + "' target='_blank'>" 
-									+ node.data.link[link].title
+									+ title
 								+ "</a></br>");	
 						}
+
 						if(p.text().length > 0){
 							p.css({
-								'display': 'block',
+								// 'display': 'block',
 								'top': label.offset().top + label.height()-3,
 								'left': label.offset().left + label.width()
 							});
-						}					
-					} ,800);
-				}
-				ht.visiblePopup = true
+							p.fadeIn(200);
+						}
+					}					
+				} ,800);
+				ht.popupActive = node
 		    },
 		  	onHide: function() {  
 				var node = this.highlightedNode;
-				
+				console.log("onHide");
 				setTimeout(function(){
-					if(!ht.visiblePopup)
-						$("#_popup").css({'display': ''});
+					if(!ht.popupActive)
+						// $("#_popup").css({'display': ''});
+						 $("#_popup").fadeOut(200);
 					else
 						console.log('canceled');
 				}, 1000);
-				ht.visiblePopup = false;
+				ht.popupActive = null;
 				node.data['$type'] = 'circle';
 				node.data['$color'] = node.Node.color;
 				node.data['$dim'] = node.Node.dim;
@@ -334,7 +364,7 @@ function init() {
 	            $jit.util.addEvent(domElement, 'click',
 		            function() {
 						node.Node.removeHighlight();
-						ht.onClick(node.id);
+						ht.onClick(node.id, {hideLabels: false});
 		            });            			
 			}else{
 				domElement.style.cursor = 'default';
